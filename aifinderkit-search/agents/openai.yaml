@@ -1,8 +1,8 @@
 interface:
   display_name: "AI Finder Kit Search"
-  short_description: "Aggregate web search, batch queries, and safe page extraction"
+  short_description: "Aggregate search, safe extraction, and cited research"
   brand_color: "#174F43"
-  default_prompt: "Use $aifinderkit-search to research this topic with cited, deduplicated web sources."
+  default_prompt: "Use $aifinderkit-search to research this topic with deduplicated evidence and direct citations."
 
 policy:
   allow_implicit_invocation: true

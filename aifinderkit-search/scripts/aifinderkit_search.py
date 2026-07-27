@@ -6,13 +6,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 import urllib.error
 import urllib.request
 
-
 DEFAULT_BASE_URL = "https://api.aifinderkit.com/v1"
-CLIENT_VERSION = "1.1.0"
+CLIENT_VERSION = "1.2.0"
 
 
 def request_json(path: str, payload: dict | None, timeout: int) -> dict:
@@ -51,6 +49,27 @@ def add_search_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--mode", choices=["fast", "balanced", "deep"], default="balanced")
     parser.add_argument("--freshness", choices=["day", "week", "month", "year"])
+    parser.add_argument("--language", help="Preferred result language, for example zh or en")
+    parser.add_argument(
+        "--category",
+        dest="categories",
+        action="append",
+        help="Search category; repeat up to five times",
+    )
+    parser.add_argument("--include-domain", dest="include_domains", action="append")
+    parser.add_argument("--exclude-domain", dest="exclude_domains", action="append")
+
+
+def parse_key_values(values: list[str] | None) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for item in values or []:
+        if "=" not in item:
+            raise SystemExit("--vertical-param must use key=value format")
+        key, value = item.split("=", 1)
+        if not key:
+            raise SystemExit("--vertical-param key must not be empty")
+        parsed[key] = value
+    return parsed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,6 +82,9 @@ def build_parser() -> argparse.ArgumentParser:
     search = commands.add_parser("search", help="Run one aggregate search")
     search.add_argument("query")
     add_search_options(search)
+    search.add_argument("--vertical-domain")
+    search.add_argument("--vertical-sub-domain")
+    search.add_argument("--vertical-param", dest="vertical_params", action="append")
 
     batch = commands.add_parser("batch", help="Run two to five searches")
     batch.add_argument("--query", action="append", required=True)
@@ -72,19 +94,38 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("url")
     fetch.add_argument("--max-chars", type=int, default=30000)
 
+    map_command = commands.add_parser("map", help="List bounded same-host page links")
+    map_command.add_argument("url")
+    map_command.add_argument("--max-links", type=int, default=50)
+
+    crawl = commands.add_parser("crawl", help="Crawl a small same-host static site section")
+    crawl.add_argument("url")
+    crawl.add_argument("--max-pages", type=int, default=5)
+    crawl.add_argument("--max-depth", type=int, default=1)
+    crawl.add_argument("--max-chars-per-page", type=int, default=12000)
+
+    domains = commands.add_parser("domains", help="Discover AnySearch vertical sub-domains")
+    domains.add_argument("--domain", dest="domains", action="append", required=True)
+
     research = commands.add_parser("research", help="Search and extract top pages")
     research.add_argument("query")
+    research.add_argument("--subquery", dest="subqueries", action="append")
     research.add_argument("--limit", type=int, default=10)
     research.add_argument("--fetch-top", type=int, default=3)
     research.add_argument("--freshness", choices=["day", "week", "month", "year"])
+    research.add_argument("--language")
+    research.add_argument("--category", dest="categories", action="append")
+    research.add_argument("--include-domain", dest="include_domains", action="append")
+    research.add_argument("--exclude-domain", dest="exclude_domains", action="append")
 
     commands.add_parser("meta", help="Show access tier and limits")
-    commands.add_parser("doctor", help="Verify authentication and print a sanitized capability summary")
+    commands.add_parser(
+        "doctor", help="Verify authentication and print a sanitized capability summary"
+    )
     return parser
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def build_request(args: argparse.Namespace) -> tuple[str, dict | None]:
     if args.command == "search":
         path = "/search"
         payload = {
@@ -92,6 +133,13 @@ def main() -> None:
             "limit": args.limit,
             "mode": args.mode,
             "freshness": args.freshness,
+            "language": args.language,
+            "categories": args.categories or [],
+            "include_domains": args.include_domains or [],
+            "exclude_domains": args.exclude_domains or [],
+            "vertical_domain": args.vertical_domain,
+            "vertical_sub_domain": args.vertical_sub_domain,
+            "vertical_params": parse_key_values(args.vertical_params),
         }
     elif args.command == "batch":
         if not 1 <= len(args.query) <= 5:
@@ -102,17 +150,40 @@ def main() -> None:
             "limit": args.limit,
             "mode": args.mode,
             "freshness": args.freshness,
+            "language": args.language,
+            "categories": args.categories or [],
+            "include_domains": args.include_domains or [],
+            "exclude_domains": args.exclude_domains or [],
         }
     elif args.command == "fetch":
         path = "/fetch"
         payload = {"url": args.url, "max_chars": args.max_chars}
+    elif args.command == "map":
+        path = "/map"
+        payload = {"url": args.url, "max_links": args.max_links}
+    elif args.command == "crawl":
+        path = "/crawl"
+        payload = {
+            "url": args.url,
+            "max_pages": args.max_pages,
+            "max_depth": args.max_depth,
+            "max_chars_per_page": args.max_chars_per_page,
+        }
+    elif args.command == "domains":
+        path = "/vertical-domains"
+        payload = {"domains": args.domains}
     elif args.command == "research":
         path = "/research"
         payload = {
             "query": args.query,
+            "subqueries": args.subqueries or [],
             "limit": args.limit,
             "fetch_top": args.fetch_top,
             "freshness": args.freshness,
+            "language": args.language,
+            "categories": args.categories or [],
+            "include_domains": args.include_domains or [],
+            "exclude_domains": args.exclude_domains or [],
         }
     else:
         path = "/search/meta"
@@ -121,6 +192,12 @@ def main() -> None:
     # Drop optional null fields so the payload stays compatible with strict clients.
     if payload is not None:
         payload = {key: value for key, value in payload.items() if value is not None}
+    return path, payload
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    path, payload = build_request(args)
     result = request_json(path, payload, args.timeout)
     if args.command == "doctor":
         result = {
