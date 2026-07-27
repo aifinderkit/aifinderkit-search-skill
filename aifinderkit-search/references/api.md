@@ -10,9 +10,9 @@ Client compatibility: Python 3.10+; no third-party packages required. Run `pytho
 
 ### `POST /search`
 
-Input: `query` (required), `limit` (1–30), `mode` (`fast`, `balanced`, `deep`), optional `freshness`, `language`, `categories`, `include_domains`, and `exclude_domains`.
+Input: `query` (required), `limit` (1–30), `mode` (`fast`, `balanced`, `deep`), optional `preset` (`academic-relaxed` or `academic-strict`), `freshness`, `language`, `categories`, `include_domains`, and `exclude_domains`.
 
-Output contains `results[]` with `title`, canonical `url`, `snippet`, `published_at`, `sources`, `engines`, `domain`, `source_type`, `match_reasons`, retrieval `confidence`, `retrieved_at`, `rank`, and fusion `score`. Top-level fields include `sources_used`, `queries_used`, `warnings`, `duration_ms`, `cached`, and `created_at`.
+Output contains `results[]` with `title`, canonical `url`, cleaned query-centered `snippet`, `published_at`, `sources`, `engines`, `domain`, `source_type`, `match_reasons`, `retrieval_score`, component `retrieval_signals`, `retrieved_at`, `rank`, and fusion `score`. `confidence` remains temporarily as a deprecated alias and never means factual truth. Academic results may include DOI, authors, year, venue, retraction status, and legal open-access PDF information under `academic`. Top-level fields include `sources_used`, `metadata_sources`, `queries_used`, `warnings`, `duration_ms`, `cached`, and `created_at`.
 
 ### `POST /batch-search`
 
@@ -36,11 +36,11 @@ Input: `url`, `max_pages` (1–8), `max_depth` (0–2), and `max_chars_per_page`
 
 ### `POST /research`
 
-Input: `query`, optional `subqueries` (up to five), `limit`, `fetch_top` (0–5), and shared search filters. The root query uses `deep`; explicit subqueries use `balanced`. Output contains `searches[]`, merged `results[]`, extracted `evidence[]`, `evidence_matrix[]`, `coverage`, and machine-readable `gaps`. Evidence entries retain the result metadata, stable `S1`-style citation ID, and SHA-256 of fetched text. A failed document contains `error: "fetch unavailable"`; never cite it as evidence.
+Input: `query`, optional `subqueries` (up to five), `limit`, `fetch_top` (0–5), optional academic `preset`, and shared search filters. The root query uses `deep`; explicit subqueries use `balanced`. Output contains `searches[]`, merged `results[]`, extracted `evidence[]`, `evidence_matrix[]`, `coverage`, and machine-readable `gaps`. For academic results, an available legal open-access PDF is fetched before the landing page. Evidence entries retain the result metadata, stable `S1`-style citation ID, DOI/author/year/PDF fields, and SHA-256 of fetched text. A failed document contains `error: "fetch unavailable"`; never cite it as evidence.
 
 ### `GET /search/meta`
 
-Returns the access tier, supported operations, mode time budgets, outbound/fetch concurrency caps, and limits granted to the current key. Available source providers depend on that tier and may change without requiring a client update.
+Returns the access tier, supported operations, academic presets, mode time budgets, outbound/fetch concurrency caps, and limits granted to the current key. Available source providers depend on that tier and may change without requiring a client update.
 
 ## Errors
 

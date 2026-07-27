@@ -4,19 +4,59 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
+import stat
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 DEFAULT_BASE_URL = "https://api.aifinderkit.com/v1"
-CLIENT_VERSION = "1.2.0"
+CLIENT_VERSION = "1.3.0"
+DEFAULT_KEY_FILE = Path("~/.config/aifinderkit/credentials").expanduser()
+
+
+def credential_path() -> Path:
+    configured = os.getenv("AIFINDERKIT_API_KEY_FILE", "").strip()
+    return Path(configured).expanduser() if configured else DEFAULT_KEY_FILE
+
+
+def load_api_key() -> str:
+    environment_key = os.getenv("AIFINDERKIT_API_KEY", "").strip()
+    if environment_key:
+        return environment_key
+    path = credential_path()
+    if not path.is_file():
+        raise SystemExit(
+            "AIFINDERKIT_API_KEY is not set and no protected credential file exists"
+        )
+    if os.name == "posix" and stat.S_IMODE(path.stat().st_mode) & 0o077:
+        raise SystemExit(f"Credential file permissions are too broad: {path}; require 0600")
+    api_key = path.read_text(encoding="utf-8").strip()
+    if not api_key:
+        raise SystemExit(f"Credential file is empty: {path}")
+    return api_key
+
+
+def configure_key() -> Path:
+    api_key = os.getenv("AIFINDERKIT_API_KEY", "").strip()
+    if not api_key:
+        api_key = getpass.getpass("AI Finder Kit API key: ").strip()
+    if not api_key:
+        raise SystemExit("API key must not be empty")
+    path = credential_path()
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(api_key + "\n")
+    if os.name == "posix":
+        path.chmod(0o600)
+    return path
 
 
 def request_json(path: str, payload: dict | None, timeout: int) -> dict:
-    api_key = os.getenv("AIFINDERKIT_API_KEY", "").strip()
-    if not api_key:
-        raise SystemExit("AIFINDERKIT_API_KEY is not set")
+    api_key = load_api_key()
     base_url = os.getenv("AIFINDERKIT_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
@@ -48,6 +88,7 @@ def request_json(path: str, payload: dict | None, timeout: int) -> dict:
 def add_search_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--mode", choices=["fast", "balanced", "deep"], default="balanced")
+    parser.add_argument("--preset", choices=["academic-relaxed", "academic-strict"])
     parser.add_argument("--freshness", choices=["day", "week", "month", "year"])
     parser.add_argument("--language", help="Preferred result language, for example zh or en")
     parser.add_argument(
@@ -112,6 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     research.add_argument("--subquery", dest="subqueries", action="append")
     research.add_argument("--limit", type=int, default=10)
     research.add_argument("--fetch-top", type=int, default=3)
+    research.add_argument("--preset", choices=["academic-relaxed", "academic-strict"])
     research.add_argument("--freshness", choices=["day", "week", "month", "year"])
     research.add_argument("--language")
     research.add_argument("--category", dest="categories", action="append")
@@ -119,6 +161,9 @@ def build_parser() -> argparse.ArgumentParser:
     research.add_argument("--exclude-domain", dest="exclude_domains", action="append")
 
     commands.add_parser("meta", help="Show access tier and limits")
+    commands.add_parser(
+        "configure", help="Store a key in a protected file outside the skill directory"
+    )
     commands.add_parser(
         "doctor", help="Verify authentication and print a sanitized capability summary"
     )
@@ -132,6 +177,7 @@ def build_request(args: argparse.Namespace) -> tuple[str, dict | None]:
             "query": args.query,
             "limit": args.limit,
             "mode": args.mode,
+            "preset": args.preset,
             "freshness": args.freshness,
             "language": args.language,
             "categories": args.categories or [],
@@ -149,6 +195,7 @@ def build_request(args: argparse.Namespace) -> tuple[str, dict | None]:
             "queries": args.query,
             "limit": args.limit,
             "mode": args.mode,
+            "preset": args.preset,
             "freshness": args.freshness,
             "language": args.language,
             "categories": args.categories or [],
@@ -179,6 +226,7 @@ def build_request(args: argparse.Namespace) -> tuple[str, dict | None]:
             "subqueries": args.subqueries or [],
             "limit": args.limit,
             "fetch_top": args.fetch_top,
+            "preset": args.preset,
             "freshness": args.freshness,
             "language": args.language,
             "categories": args.categories or [],
@@ -197,6 +245,10 @@ def build_request(args: argparse.Namespace) -> tuple[str, dict | None]:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.command == "configure":
+        path = configure_key()
+        print(json.dumps({"ok": True, "credential_file": str(path)}, ensure_ascii=False))
+        return
     path, payload = build_request(args)
     result = request_json(path, payload, args.timeout)
     if args.command == "doctor":
@@ -207,6 +259,7 @@ def main() -> None:
             "source_tier": result.get("source_tier"),
             "endpoints": result.get("endpoints", []),
             "modes": result.get("modes", []),
+            "presets": result.get("presets", []),
             "limits": result.get("limits", {}),
             "credentials_in_bundle": False,
         }
