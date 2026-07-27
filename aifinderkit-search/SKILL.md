@@ -5,7 +5,7 @@ description: Search and extract current web information through the AI Finder Ki
 
 # AI Finder Kit Search
 
-Version: `1.2.0` (development)
+Version: `1.2.0`
 
 Use the bundled dependency-free client to query the authenticated aggregate search service. Keep the API key in `AIFINDERKIT_API_KEY`; never place it in prompts, command output, source files, or skill files.
 
