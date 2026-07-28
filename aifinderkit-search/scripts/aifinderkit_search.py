@@ -8,12 +8,13 @@ import getpass
 import json
 import os
 import stat
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 DEFAULT_BASE_URL = "https://api.aifinderkit.com/v1"
-CLIENT_VERSION = "1.3.0"
+CLIENT_VERSION = "1.3.1"
 DEFAULT_KEY_FILE = Path("~/.config/aifinderkit/credentials").expanduser()
 
 
@@ -39,9 +40,12 @@ def load_api_key() -> str:
     return api_key
 
 
-def configure_key() -> Path:
-    api_key = os.getenv("AIFINDERKIT_API_KEY", "").strip()
-    if not api_key:
+def configure_key(*, read_stdin: bool = False) -> Path:
+    if read_stdin:
+        api_key = sys.stdin.readline().strip()
+    else:
+        api_key = os.getenv("AIFINDERKIT_API_KEY", "").strip()
+    if not api_key and not read_stdin:
         api_key = getpass.getpass("AI Finder Kit API key: ").strip()
     if not api_key:
         raise SystemExit("API key must not be empty")
@@ -127,7 +131,9 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--vertical-sub-domain")
     search.add_argument("--vertical-param", dest="vertical_params", action="append")
 
-    batch = commands.add_parser("batch", help="Run two to five searches")
+    batch = commands.add_parser(
+        "batch", help="Run one to five searches; repeat --query for each query"
+    )
     batch.add_argument("--query", action="append", required=True)
     add_search_options(batch)
 
@@ -161,8 +167,13 @@ def build_parser() -> argparse.ArgumentParser:
     research.add_argument("--exclude-domain", dest="exclude_domains", action="append")
 
     commands.add_parser("meta", help="Show access tier and limits")
-    commands.add_parser(
+    configure = commands.add_parser(
         "configure", help="Store a key in a protected file outside the skill directory"
+    )
+    configure.add_argument(
+        "--key-stdin",
+        action="store_true",
+        help="Read one key line from standard input for non-interactive setup",
     )
     commands.add_parser(
         "doctor", help="Verify authentication and print a sanitized capability summary"
@@ -246,7 +257,7 @@ def build_request(args: argparse.Namespace) -> tuple[str, dict | None]:
 def main() -> None:
     args = build_parser().parse_args()
     if args.command == "configure":
-        path = configure_key()
+        path = configure_key(read_stdin=args.key_stdin)
         print(json.dumps({"ok": True, "credential_file": str(path)}, ensure_ascii=False))
         return
     path, payload = build_request(args)

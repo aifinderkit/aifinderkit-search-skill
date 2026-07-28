@@ -37,6 +37,9 @@ Alternatively run `python scripts/aifinderkit_search.py configure` once. It read
 the key without echo and stores it outside the repository at
 `~/.config/aifinderkit/credentials` with mode `0600`.
 
+For non-interactive setup, pipe exactly one key line from a secret manager into
+`configure --key-stdin`. Do not pass a key as a command-line argument.
+
 For Claude Code, replace `~/.codex/skills` with `~/.claude/skills`. Start a new agent session after installation so the Skill can be discovered.
 
 ## Commands
@@ -48,11 +51,13 @@ python scripts/aifinderkit_search.py search "query" --include-domain github.com
 python scripts/aifinderkit_search.py domains --domain academic --domain code
 python scripts/aifinderkit_search.py search "multimodal learning" --preset academic-strict --mode deep
 python scripts/aifinderkit_search.py batch --query "first" --query "second"
+python scripts/aifinderkit_search.py batch --query "paper one" --query "paper two" --preset academic-relaxed --limit 5
 python scripts/aifinderkit_search.py fetch "https://example.com/page"
 python scripts/aifinderkit_search.py map "https://example.com/docs" --max-links 30
 python scripts/aifinderkit_search.py crawl "https://example.com/docs" --max-pages 5 --max-depth 1
 python scripts/aifinderkit_search.py research "topic" --subquery "official evidence" --fetch-top 3
 python scripts/aifinderkit_search.py research "graph neural network survey" --preset academic-strict --fetch-top 5
+python scripts/aifinderkit_search.py --timeout 120 research "large literature review" --preset academic-strict --fetch-top 5
 python scripts/aifinderkit_search.py meta
 python scripts/aifinderkit_search.py doctor
 ```

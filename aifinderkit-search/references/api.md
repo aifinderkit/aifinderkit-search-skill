@@ -12,7 +12,30 @@ Client compatibility: Python 3.10+; no third-party packages required. Run `pytho
 
 Input: `query` (required), `limit` (1–30), `mode` (`fast`, `balanced`, `deep`), optional `preset` (`academic-relaxed` or `academic-strict`), `freshness`, `language`, `categories`, `include_domains`, and `exclude_domains`.
 
-Output contains `results[]` with `title`, canonical `url`, cleaned query-centered `snippet`, `published_at`, `sources`, `engines`, `domain`, `source_type`, `match_reasons`, `retrieval_score`, component `retrieval_signals`, `retrieved_at`, `rank`, and fusion `score`. `confidence` remains temporarily as a deprecated alias and never means factual truth. Academic results may include DOI, authors, year, venue, retraction status, and legal open-access PDF information under `academic`. Top-level fields include `sources_used`, `metadata_sources`, `queries_used`, `warnings`, `duration_ms`, `cached`, and `created_at`.
+Output contains `results[]` with `title`, canonical `url`, cleaned query-centered `snippet`, `published_at`, `sources`, `engines`, `domain`, `source_type`, `match_reasons`, `retrieved_at`, `rank`, and the scores described below. Top-level fields include `sources_used`, `enrichment_sources`, `queries_used`, `warnings`, `duration_ms`, `cached`, and `created_at`. Top-level `metadata_sources` is a deprecated compatibility alias for `enrichment_sources`.
+
+Score semantics:
+
+- `score`: weighted reciprocal-rank fusion value used to order provider candidates; do not compare it across unrelated requests.
+- `retrieval_score`: normalized retrieval-quality score recommended for result selection.
+- `retrieval_signals`: components of `retrieval_score`: `query_relevance`, `rank`, `source_diversity`, `metadata_completeness`, `source_authority`, and `academic_evidence`.
+- `confidence`: deprecated alias for `retrieval_score`, identified by `confidence_semantics: "deprecated_alias_for_retrieval_score"`; it is not factual confidence.
+
+Academic results contain an `academic` object:
+
+| Field | Meaning |
+|---|---|
+| `score` | Strength of academic classification signals, not paper quality |
+| `query_relevance` | Query relevance derived from title and snippet |
+| `signals[]` | Reasons such as `academic_search_engine`, `doi_available`, or `query_terms_matched` |
+| `doi`, `authors[]`, `year`, `venue` | Normalized bibliographic metadata when available |
+| `pdf_url`, `is_oa` | Legal open-access PDF discovery; never implies paywall bypass |
+| `is_retracted` | Optional retraction flag when a configured source supplies it |
+| `metadata_sources[]` | Direct external enrichment sources for this result |
+| `enrichment_status` | `not_attempted`, `not_configured`, `not_needed`, `no_doi`, `enriched`, `not_found`, `error`, or `timeout` |
+| `oa_source`, `oa_version`, `landing_page_url` | Optional open-access location details supplied by enrichment |
+
+`enrichment_status` describes direct external enrichment only. A result marked `not_found`, `error`, `timeout`, or `not_configured` may still carry DOI, author, venue, and PDF fields obtained from the search engine. `metadata_sources` inside `academic` is scoped to that result; top-level `enrichment_sources` is the union of successful direct enrichment sources across the request.
 
 ### `POST /batch-search`
 
